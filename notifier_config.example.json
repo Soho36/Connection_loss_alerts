@@ -1,0 +1,13 @@
+{
+  "queue_file": "C:\\Users\\Liikurserv\\Documents\\NinjaTrader 8\\connection_alerts\\connection_alert_queue.tsv",
+  "state_file": "C:\\Users\\Liikurserv\\Documents\\NinjaTrader 8\\connection_alerts\\notifier_state.json",
+  "poll_seconds": 10,
+  "healthchecks": {
+    "enabled": true,
+    "ping_url": "https://hc-ping.com/bc92c76a-8592-40c0-a11b-b63d378970c6",
+    "send_failure": false,
+    "send_heartbeat": true,
+    "heartbeat_seconds": 60,
+    "timeout_seconds": 20
+  }
+}
