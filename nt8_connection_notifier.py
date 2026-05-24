@@ -290,7 +290,7 @@ def process_heartbeat(config, state):
         return
 
     state["last_healthchecks_heartbeat"] = now
-    print("healthchecks heartbeat sent")
+    print(f"healthchecks heartbeat sent at {datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}")
 
 
 def main():
@@ -329,4 +329,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Exiting on user request")
