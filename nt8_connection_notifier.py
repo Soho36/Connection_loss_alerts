@@ -107,6 +107,11 @@ def append_test_alert(queue_file, connection_type):
 
     if not path.exists():
         path.write_text("\t".join(QUEUE_HEADER) + "\n", encoding="utf-8")
+    else:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+
+        if lines and lines[0].split("\t") != QUEUE_HEADER:
+            path.write_text("\t".join(QUEUE_HEADER) + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
 
     now = datetime.now()
     row = {
@@ -144,13 +149,21 @@ def read_alerts(queue_file):
 
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
 
-    if len(lines) < 2:
+    if not lines:
         return []
 
-    header = lines[0].split("\t")
+    first_row = lines[0].split("\t")
+
+    if first_row == QUEUE_HEADER:
+        header = first_row
+        data_lines = lines[1:]
+    else:
+        header = QUEUE_HEADER
+        data_lines = lines
+
     alerts = []
 
-    for line in lines[1:]:
+    for line in data_lines:
         if not line.strip():
             continue
 
