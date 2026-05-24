@@ -57,6 +57,13 @@ To test without running forever:
 python nt8_connection_notifier.py --config notifier_config.json --once
 ```
 
+To test connection loss events:
+
+```powershell
+python nt8_connection_notifier.py --config notifier_config.json --write-test-alert PRICE
+python nt8_connection_notifier.py --config notifier_config.json --write-test-alert ORDER
+```
+
 ## Optional Heartbeat
 
 To make Healthchecks also monitor whether this Python notifier is still alive, set
