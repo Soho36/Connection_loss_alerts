@@ -183,8 +183,8 @@ def build_message(alert):
     )
 
 
-def send_healthchecks(healthchecks_config, alert):
-    ping_url = healthchecks_config.get("ping_url", "").rstrip("/")
+def send_healthchecks_connection_alerts(healthchecks_config, alert):
+    ping_url = healthchecks_config.get("alert_ping_url", "").rstrip("/")
 
     if not ping_url:
         raise ValueError("Healthchecks channel is enabled but ping_url is missing")
@@ -203,7 +203,7 @@ def send_healthchecks(healthchecks_config, alert):
         raise RuntimeError(f"Healthchecks returned HTTP {response.status}: {response_body}")
 
 
-def send_healthchecks_heartbeat(healthchecks_config):
+def send_healthchecks_pc_heartbeat(healthchecks_config):
     ping_url = healthchecks_config.get("ping_url", "").rstrip("/")
 
     if not ping_url:
@@ -246,7 +246,7 @@ def process_alerts(config, state):
             continue
 
         try:
-            send_healthchecks(healthchecks_config, alert)
+            send_healthchecks_connection_alerts(healthchecks_config, alert)
         except Exception as exc:
             print(f"healthchecks failed for alert {alert_id}: {exc}")
             continue
@@ -271,7 +271,7 @@ def process_heartbeat(config, state):
         return
 
     try:
-        send_healthchecks_heartbeat(healthchecks_config)
+        send_healthchecks_pc_heartbeat(healthchecks_config)
     except Exception as exc:
         print(f"healthchecks heartbeat failed: {exc}")
         return

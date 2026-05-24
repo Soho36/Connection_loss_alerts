@@ -5,7 +5,8 @@
   "healthchecks": {
     "enabled": true,
     "ping_url": "https://hc-ping.com/bc92c76a-8592-40c0-a11b-b63d378970c6",
-    "send_failure": false,
+    "alert_ping_url": "https://hc-ping.com/88eebbe9-4917-44fc-ae78-3975565c2bb5",
+    "send_failure": true,
     "send_heartbeat": true,
     "heartbeat_seconds": 60,
     "timeout_seconds": 20
