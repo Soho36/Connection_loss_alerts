@@ -8,6 +8,9 @@ from pathlib import Path
 
 
 DEFAULT_CONFIG = "notifier_config.json"
+
+# TSV columns shared with the NinjaTrader indicator. The notifier uses these names
+# when parsing queue rows and when writing manual test alerts.
 QUEUE_HEADER = [
     "id",
     "created_at",
@@ -27,6 +30,8 @@ QUEUE_HEADER = [
 ]
 
 
+# Config and state helpers. State is written atomically so a crash or forced stop
+# does not leave a half-written JSON file behind.
 def load_json(path, default):
     file_path = Path(path)
 
@@ -67,6 +72,9 @@ def resolve_config(value):
     return resolve_value(value)
 
 
+# NinjaTrader writes TSV rows, with tabs/newlines escaped inside fields. These
+# helpers keep the queue format readable while still allowing error messages to
+# contain line breaks or other special characters.
 def unescape_field(value):
     result = []
     index = 0
@@ -101,6 +109,9 @@ def escape_field(value):
     return str(value or "").replace("\\", "\\\\").replace("\t", "\\t").replace("\r", "\\r").replace("\n", "\\n")
 
 
+# Manual test mode: append a synthetic PRICE or ORDER loss event to the same queue
+# file NT8 uses. If an older queue exists without a header, repair it before adding
+# the new row so future reads are unambiguous.
 def append_test_alert(queue_file, connection_type):
     path = Path(queue_file)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -138,9 +149,11 @@ def append_test_alert(queue_file, connection_type):
     with path.open("a", encoding="utf-8") as handle:
         handle.write("\t".join(escape_field(row[column]) for column in QUEUE_HEADER) + "\n")
 
-    print(f"wrote {connection_type} test alert to {path}")
+    print(f"Wrote {connection_type} test alert to {path}")
 
 
+# Read all queued alerts. Newer queues include a header row, but the reader also
+# accepts older/headerless files by applying QUEUE_HEADER to every row.
 def read_alerts(queue_file):
     path = Path(queue_file)
 
@@ -178,6 +191,8 @@ def read_alerts(queue_file):
     return alerts
 
 
+# Human-readable alert body posted to Healthchecks. Healthchecks stores this body
+# with the ping, which makes the alert detail visible in the check history.
 def build_message(alert):
     return (
         f"NT8 {alert.get('connection_type', 'UNKNOWN')} connection lost\n"
@@ -196,6 +211,8 @@ def build_message(alert):
     )
 
 
+# Connection-loss alerts go to alert_ping_url. By default, they are sent to the
+# Healthchecks /fail endpoint so the dedicated alert check turns red immediately.
 def send_healthchecks_connection_alerts(healthchecks_config, alert):
     ping_url = healthchecks_config.get("alert_ping_url", "").rstrip("/")
 
@@ -216,6 +233,8 @@ def send_healthchecks_connection_alerts(healthchecks_config, alert):
         raise RuntimeError(f"Healthchecks returned HTTP {response.status}: {response_body}")
 
 
+# Heartbeats go to ping_url and prove the Python notifier itself is still running.
+# This is separate from connection-loss events, which use alert_ping_url above.
 def send_healthchecks_pc_heartbeat(healthchecks_config):
     ping_url = healthchecks_config.get("ping_url", "").rstrip("/")
 
@@ -232,6 +251,8 @@ def send_healthchecks_pc_heartbeat(healthchecks_config):
         raise RuntimeError(f"Healthchecks heartbeat returned HTTP {response.status}: {response_body}")
 
 
+# Normalize state loaded from disk. sent.healthchecks prevents duplicate delivery
+# for old queue rows, while last_healthchecks_heartbeat rate-limits heartbeat pings.
 def ensure_state_shape(state):
     state.setdefault("sent", {})
     state["sent"].setdefault("healthchecks", [])
@@ -239,6 +260,8 @@ def ensure_state_shape(state):
     return state
 
 
+# Send every unsent alert currently in the queue. Failed sends are left out of the
+# sent list, so the next loop/run retries them after network or service recovery.
 def process_alerts(config, state):
     queue_file = config["queue_file"]
     alerts = read_alerts(queue_file)
@@ -261,13 +284,15 @@ def process_alerts(config, state):
         try:
             send_healthchecks_connection_alerts(healthchecks_config, alert)
         except Exception as exc:
-            print(f"healthchecks failed for alert {alert_id}: {exc}")
+            print(f"Healthchecks failed for alert {alert_id}: {exc}")
             continue
 
         sent.append(alert_id)
-        print(f"healthchecks sent for alert {alert_id}")
+        print(f"Healthchecks sent for alert {alert_id}")
 
 
+# Optional heartbeat check. This can alert if the PC, internet connection, or this
+# Python process stops, even when NT8 has not written a connection-loss event.
 def process_heartbeat(config, state):
     healthchecks_config = config.get("healthchecks", {})
 
@@ -286,13 +311,15 @@ def process_heartbeat(config, state):
     try:
         send_healthchecks_pc_heartbeat(healthchecks_config)
     except Exception as exc:
-        print(f"healthchecks heartbeat failed: {exc}")
+        print(f"Healthchecks heartbeat failed: {exc}")
         return
 
     state["last_healthchecks_heartbeat"] = now
-    print(f"healthchecks heartbeat sent at {datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Healthchecks heartbeat sent at {datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}")
 
 
+# CLI entry point. In normal mode the script polls forever; --once is useful for
+# tests and scheduled runs, and --write-test-alert creates a synthetic queue event.
 def main():
     parser = argparse.ArgumentParser(description="Send NT8 connection alerts from a file queue.")
     parser.add_argument("--config", default=DEFAULT_CONFIG, help="Path to notifier_config.json")
