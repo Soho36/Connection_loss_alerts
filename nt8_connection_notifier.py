@@ -15,6 +15,21 @@ QUEUE_HEADER = [
     "id",
     "created_at",
     "connection_type",
+    "connection",
+    "order_status",
+    "previous_order_status",
+    "price_status",
+    "previous_price_status",
+    "open_positions",
+    "working_orders",
+    "urgency",
+    "native_error",
+]
+
+LEGACY_QUEUE_HEADER = [
+    "id",
+    "created_at",
+    "connection_type",
     "strategy",
     "instrument",
     "account",
@@ -121,7 +136,7 @@ def append_test_alert(queue_file, connection_type):
     else:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
 
-        if lines and lines[0].split("\t") != QUEUE_HEADER:
+        if lines and lines[0].split("\t") not in (QUEUE_HEADER, LEGACY_QUEUE_HEADER):
             path.write_text("\t".join(QUEUE_HEADER) + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
 
     now = datetime.now()
@@ -129,17 +144,14 @@ def append_test_alert(queue_file, connection_type):
         "id": f"debug-{now:%Y%m%d%H%M%S%f}-{connection_type}",
         "created_at": now.strftime("%Y-%m-%d %H:%M:%S"),
         "connection_type": connection_type,
-        "strategy": "Manual debug alert",
-        "instrument": "Debug instrument",
-        "account": "Debug account",
         "connection": "Manual test",
         "order_status": "Connected",
         "previous_order_status": "Connected",
         "price_status": "ConnectionLost" if connection_type == "PRICE" else "Connected",
         "previous_price_status": "Connected",
-        "position": "Unknown",
-        "position_quantity": "0",
-        "tracked_order": "Manual queue test, no real NT8 order",
+        "open_positions": "0",
+        "working_orders": "0",
+        "urgency": "LOW - no open positions or working orders found",
         "native_error": "Created by nt8_connection_notifier.py --write-test-alert",
     }
 
@@ -152,8 +164,8 @@ def append_test_alert(queue_file, connection_type):
     print(f"Wrote {connection_type} test alert to {path}")
 
 
-# Read all queued alerts. Newer queues include a header row, but the reader also
-# accepts older/headerless files by applying QUEUE_HEADER to every row.
+# Read all queued alerts. Newer queues include the compact header, but the reader
+# also accepts old/headerless rows and mixed queues created during upgrades.
 def read_alerts(queue_file):
     path = Path(queue_file)
 
@@ -170,8 +182,11 @@ def read_alerts(queue_file):
     if first_row == QUEUE_HEADER:
         header = first_row
         data_lines = lines[1:]
+    elif first_row == LEGACY_QUEUE_HEADER:
+        header = first_row
+        data_lines = lines[1:]
     else:
-        header = QUEUE_HEADER
+        header = LEGACY_QUEUE_HEADER if len(first_row) == len(LEGACY_QUEUE_HEADER) else QUEUE_HEADER
         data_lines = lines
 
     alerts = []
@@ -181,12 +196,19 @@ def read_alerts(queue_file):
             continue
 
         parts = [unescape_field(part) for part in line.split("\t")]
+        row_header = header
 
-        if len(parts) != len(header):
+        if len(parts) != len(row_header):
+            if len(parts) == len(QUEUE_HEADER):
+                row_header = QUEUE_HEADER
+            elif len(parts) == len(LEGACY_QUEUE_HEADER):
+                row_header = LEGACY_QUEUE_HEADER
+
+        if len(parts) != len(row_header):
             print(f"Skipping malformed alert line: {line}")
             continue
 
-        alerts.append(dict(zip(header, parts)))
+        alerts.append(dict(zip(row_header, parts)))
 
     return alerts
 
@@ -194,19 +216,21 @@ def read_alerts(queue_file):
 # Human-readable alert body posted to Healthchecks. Healthchecks stores this body
 # with the ping, which makes the alert detail visible in the check history.
 def build_message(alert):
+    open_positions = alert.get("open_positions", alert.get("position_quantity", "Unknown"))
+    working_orders = alert.get("working_orders", "Unknown")
+    urgency = alert.get("urgency", "UNKNOWN - queue row was written by an older logger")
+
     return (
         f"NT8 {alert.get('connection_type', 'UNKNOWN')} connection lost\n"
         f"Time: {alert.get('created_at', '')}\n"
-        f"Source: {alert.get('strategy', '')}\n"
-        f"Instrument: {alert.get('instrument', '')}\n"
-        f"Account: {alert.get('account', '')}\n"
         f"Connection: {alert.get('connection', '')}\n"
         f"Order status: {alert.get('order_status', '')} "
         f"(previous: {alert.get('previous_order_status', '')})\n"
         f"Price status: {alert.get('price_status', '')} "
         f"(previous: {alert.get('previous_price_status', '')})\n"
-        f"Position: {alert.get('position', '')}, quantity: {alert.get('position_quantity', '')}\n"
-        f"Tracked order: {alert.get('tracked_order', '')}\n"
+        f"Open positions: {open_positions}\n"
+        f"Working orders: {working_orders}\n"
+        f"Urgency: {urgency}\n"
         f"Native error: {alert.get('native_error', '')}"
     )
 

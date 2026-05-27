@@ -123,11 +123,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 {
                     File.AppendAllText(
                         AlertQueueFilePath,
-                        "id\tcreated_at\tconnection_type\tstrategy\tinstrument\taccount\tconnection\torder_status\tprevious_order_status\tprice_status\tprevious_price_status\tposition\tposition_quantity\ttracked_order\tnative_error" + Environment.NewLine);
+                        "id\tcreated_at\tconnection_type\tconnection\torder_status\tprevious_order_status\tprice_status\tprevious_price_status\topen_positions\tworking_orders\turgency\tnative_error" + Environment.NewLine);
                 }
 
                 string connectionName = GetConnectionName(connectionStatusUpdate);
-                string instrumentName = Instrument != null ? Instrument.FullName : "No chart instrument";
+                int openPositions = CountOpenPositions();
+                int workingOrders = CountWorkingOrders();
+                string urgency = openPositions > 0 || workingOrders > 0
+                    ? "HIGH - open positions or working orders exist"
+                    : "LOW - no open positions or working orders found";
                 string alertId = string.Format("{0}-{1}-{2}-{3}",
                     now.ToString("yyyyMMddHHmmssfff"),
                     Name,
@@ -139,17 +143,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                     alertId,
                     now.ToString("yyyy-MM-dd HH:mm:ss"),
                     connectionType,
-                    Name,
-                    instrumentName,
-                    "All accounts",
                     connectionName,
                     connectionStatusUpdate.Status.ToString(),
                     connectionStatusUpdate.PreviousStatus.ToString(),
                     connectionStatusUpdate.PriceStatus.ToString(),
                     connectionStatusUpdate.PreviousPriceStatus.ToString(),
-                    "Unknown",
-                    "0",
-                    "Managed by standalone alert logger, no trading order tracked",
+                    openPositions.ToString(),
+                    workingOrders.ToString(),
+                    urgency,
                     connectionStatusUpdate.NativeError
                 };
 
@@ -159,6 +160,54 @@ namespace NinjaTrader.NinjaScript.Indicators
             catch (Exception ex)
             {
                 Print($"[{now}] Failed to write {connectionType} connection alert to file queue. Error: {ex.Message}");
+            }
+        }
+
+        private int CountOpenPositions()
+        {
+            int count = 0;
+
+            foreach (Account account in Account.All)
+            {
+                foreach (Position position in account.Positions)
+                {
+                    if (position.MarketPosition != MarketPosition.Flat)
+                        count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountWorkingOrders()
+        {
+            int count = 0;
+
+            foreach (Account account in Account.All)
+            {
+                foreach (Order order in account.Orders)
+                {
+                    if (IsWorkingOrderState(order.OrderState))
+                        count++;
+                }
+            }
+
+            return count;
+        }
+
+        private bool IsWorkingOrderState(OrderState orderState)
+        {
+            switch (orderState)
+            {
+                case OrderState.Accepted:
+                case OrderState.Working:
+                case OrderState.PartFilled:
+                case OrderState.ChangePending:
+                case OrderState.CancelPending:
+                case OrderState.TriggerPending:
+                    return true;
+                default:
+                    return false;
             }
         }
 
