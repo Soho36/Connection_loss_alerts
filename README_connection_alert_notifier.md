@@ -10,6 +10,7 @@ Healthchecks.io. If internet access is down, the Python script retries later.
 
 - `NT8ConnectionAlertFileLogger.cs` - standalone NT8 indicator that writes connection alerts.
 - `nt8_connection_notifier.py` - Healthchecks-only Python notifier.
+- `start_notifier.bat` - Windows launcher for the notifier.
 - `notifier_config.example.json` - example notifier configuration.
 
 ## NT8 Indicator
@@ -48,7 +49,13 @@ $env:HEALTHCHECKS_PING_URL = "https://hc-ping.com/your-check-uuid"
 3. Start the notifier:
 
 ```powershell
-python nt8_connection_notifier.py --config notifier_config.json
+.\start_notifier.bat
+```
+
+You can also start it through Python directly:
+
+```powershell
+python nt8_connection_notifier.py start --config notifier_config.json
 ```
 
 To test without running forever:

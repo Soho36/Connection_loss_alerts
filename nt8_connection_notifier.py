@@ -343,9 +343,16 @@ def process_heartbeat(config, state):
 
 
 # CLI entry point. In normal mode the script polls forever; --once is useful for
-# tests and scheduled runs, and --write-test-alert creates a synthetic queue event.
+# tests and scheduled runs, --write-test-alert creates a synthetic queue event,
+# and the optional "start" command makes the intended action explicit.
 def main():
     parser = argparse.ArgumentParser(description="Send NT8 connection alerts from a file queue.")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("start",),
+        help="Start the notifier. Optional because starting is the default action.",
+    )
     parser.add_argument("--config", default=DEFAULT_CONFIG, help="Path to notifier_config.json")
     parser.add_argument("--once", action="store_true", help="Process the queue once and exit")
     parser.add_argument(
