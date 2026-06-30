@@ -49,12 +49,16 @@ LEGACY_QUEUE_HEADER = [
 # does not leave a half-written JSON file behind.
 def load_json(path, default):
     file_path = Path(path)
+    print(f"Loading JSON: {path}")
 
     if not file_path.exists():
         return default
-
-    with file_path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    try:
+        with file_path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (json.JSONDecodeError, OSError):
+        print(f"Failed to load JSON from {path}, returning default")
+        return default
 
 
 def save_json(path, data):
